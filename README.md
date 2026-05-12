@@ -10,7 +10,8 @@
 
 HaulSync TMS Dispatch is a dedicated module in the HaulSync ecosystem, purpose-built for FTL carriers, brokers, and fleet operators that need to eliminate manual dispatch work and drive fleet utilization higher. It ships as a standalone service that integrates seamlessly with the core HaulSync platform and plugs natively into the Fleet and Control Tower modules.
 
-**The problem it solves:** Dispatchers spend 20+ hours a week on manual BOL entry, load-to-truck matching, and status tracking across 5+ disconnected systems. HaulSync TMS Dispatch replaces all of that with a single unified board, AI document reading, and proactive HOS alerting — reducing dispatch time by 65% and increasing fleet utilization by 15%.
+**The problem it solves:** Dispatchers spend a significant amount of time on manual BOL entry, load-to-truck matching, and status tracking across multiple disconnected systems. HaulSync TMS Dispatch replaces all of that with a single unified board, AI-powered document reading, and proactive HOS alerting — dramatically reducing dispatch workload while improving overall fleet utilization.
+
 
 ---
 
