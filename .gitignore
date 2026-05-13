@@ -1,0 +1,9 @@
+node_modules/
+dist/
+build/
+.env
+*.local
+uploads/bols/
+uploads/corrections.json
+*.log
+.DS_Store

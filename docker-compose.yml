@@ -1,0 +1,52 @@
+
+services:
+
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       haulsync_tms
+      POSTGRES_USER:     haulsync
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-haulsync_secret}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5436:5432"   # offset from other HaulSync modules
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U haulsync -d haulsync_tms"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context:    ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: ./backend/.env
+    environment:
+      DATABASE_URL: postgresql://haulsync:${DB_PASSWORD:-haulsync_secret}@postgres:5432/haulsync_tms
+      PORT: 5004
+    ports:
+      - "5004:5004"
+    volumes:
+      - bols_data:/app/uploads/bols
+      - corrections_data:/app/uploads
+
+  frontend:
+    build:
+      context:    ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3004:80"
+
+volumes:
+  postgres_data:
+  bols_data:
+  corrections_data:
