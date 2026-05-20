@@ -1,0 +1,470 @@
+// HaulSync TMS Dispatch — Prisma Schema
+// PostgreSQL · Node.js 18 · Prisma 5
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── ENUMS ─────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  DISPATCHER
+  OPERATOR
+  DRIVER
+  FINANCE
+  VIEWER
+}
+
+enum TruckType {
+  DRY_VAN
+  REEFER
+  FLATBED
+  STEP_DECK
+  TANKER
+  LOWBOY
+  CONESTOGA
+  CURTAIN_SIDE
+  BOX_TRUCK
+  SPRINTER
+}
+
+enum TruckStatus {
+  AVAILABLE
+  ON_LOAD
+  OUT_OF_SERVICE
+  RETURNING
+}
+
+enum DriverStatus {
+  AVAILABLE
+  ON_DUTY
+  OFF_DUTY
+  SLEEPER
+  VIOLATION
+}
+
+enum HOSRuleSet {
+  US_PROPERTY
+  US_PASSENGER
+  CANADA
+  CANADA_NORTH
+}
+
+enum HOSAlertType {
+  HOS_WARNING
+  BREAK_REQUIRED
+  WEEKLY_LIMIT_WARNING
+  SLEEPER_SPLIT_RISK
+  VIOLATION_DETECTED
+}
+
+enum LoadStatus {
+  UNASSIGNED
+  ASSIGNED
+  IN_TRANSIT
+  AT_PICKUP
+  AT_DELIVERY
+  DELIVERED
+  POD_PENDING
+  COMPLETED
+  CANCELLED
+}
+
+enum ELDProvider {
+  SAMSARA
+  MOTIVE
+  OMNITRACS
+  GEOTAB
+  PEOPLENET
+  BIGROAD
+  WEBHOOK
+  MANUAL
+}
+
+enum MapsProvider {
+  GOOGLE
+  HERE
+  MAPBOX
+  OSRM
+}
+
+enum DocumentType {
+  BOL
+  INVOICE
+  POD
+  RATE_CON
+  LUMPER_RECEIPT
+  OTHER
+}
+
+enum AIExtractionStatus {
+  PENDING
+  EXTRACTED
+  REVIEWED
+  REJECTED
+}
+
+// ── USER & AUTH ───────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      UserRole @default(OPERATOR)
+  phone     String?
+  isActive  Boolean  @default(true)
+  carrierId String?
+  carrier   Carrier? @relation(fields: [carrierId], references: [id])
+  driverId  String?  @unique
+  driver    Driver?  @relation(fields: [driverId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  loadsCreated    Load[]       @relation("LoadCreatedBy")
+  loadsDispatched Load[]       @relation("LoadDispatchedBy")
+  activityLogs    ActivityLog[]
+
+  @@map("users")
+}
+
+// ── CARRIER & COMPANY MASTER ──────────────────────────────────────────────────
+
+model Carrier {
+  id            String  @id @default(uuid())
+  name          String
+  mcNumber      String? @unique
+  dotNumber     String? @unique
+  address       String?
+  city          String?
+  state         String?
+  zip           String?
+  country       String  @default("US")
+  phone         String?
+  email         String?
+  contactPerson String?
+  isActive      Boolean @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  users   User[]
+  trucks  Truck[]
+  drivers Driver[]
+  loads   Load[]
+
+  @@map("carriers")
+}
+
+model Shipper {
+  id            String  @id @default(uuid())
+  name          String
+  address       String?
+  city          String?
+  state         String?
+  zip           String?
+  country       String  @default("US")
+  phone         String?
+  email         String?
+  contactPerson String?
+  isActive      Boolean @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  loads Load[]
+
+  @@map("shippers")
+}
+
+// ── FLEET ─────────────────────────────────────────────────────────────────────
+
+model Truck {
+  id              String      @id @default(uuid())
+  unitNumber      String      @unique
+  type            TruckType
+  make            String?
+  model           String?
+  year            Int?
+  vin             String?     @unique
+  licensePlate    String?
+  state           String?
+  gvwr            Float?
+  eldDeviceId     String?
+  eldProvider     ELDProvider @default(MANUAL)
+  currentLat      Float?
+  currentLng      Float?
+  currentLocation String?
+  status          TruckStatus @default(AVAILABLE)
+  carrierId       String?
+  carrier         Carrier?    @relation(fields: [carrierId], references: [id])
+  isActive        Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  loads      Load[]
+  hosLogs    HOSLog[]
+
+  @@map("trucks")
+}
+
+model Driver {
+  id              String       @id @default(uuid())
+  name            String
+  email           String?      @unique
+  phone           String?      @unique
+  licenseNumber   String?      @unique
+  licenseState    String?
+  licenseExpiry   DateTime?
+  hosRuleSet      HOSRuleSet   @default(US_PROPERTY)
+  currentHosDriving  Float    @default(11.0)  // hours remaining
+  currentHosOnDuty   Float    @default(14.0)  // hours remaining
+  currentHosWeekly   Float    @default(70.0)  // hours remaining
+  lastHosUpdate   DateTime?
+  status          DriverStatus @default(AVAILABLE)
+  rating          Float        @default(5.0)
+  totalLoads      Int          @default(0)
+  carrierId       String?
+  carrier         Carrier?     @relation(fields: [carrierId], references: [id])
+  isActive        Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  user       User?
+  loads      Load[]
+  hosLogs    HOSLog[]
+  hosAlerts  HOSAlert[]
+
+  @@map("drivers")
+}
+
+// ── HOS TRACKING ──────────────────────────────────────────────────────────────
+
+model HOSLog {
+  id          String   @id @default(uuid())
+  driverId    String
+  driver      Driver   @relation(fields: [driverId], references: [id])
+  truckId     String?
+  truck       Truck?   @relation(fields: [truckId], references: [id])
+  eventType   String   // ON_DUTY, OFF_DUTY, DRIVING, SLEEPER, PC, YM
+  startAt     DateTime
+  endAt       DateTime?
+  durationMin Float?
+  location    String?
+  lat         Float?
+  lng         Float?
+  source      ELDProvider @default(MANUAL)
+  createdAt   DateTime @default(now())
+
+  @@map("hos_logs")
+}
+
+model HOSAlert {
+  id          String       @id @default(uuid())
+  driverId    String
+  driver      Driver       @relation(fields: [driverId], references: [id])
+  loadId      String?
+  load        Load?        @relation(fields: [loadId], references: [id])
+  alertType   HOSAlertType
+  minutesRemaining Float?
+  ruleViolated String?
+  message     String
+  isRead      Boolean      @default(false)
+  resolvedAt  DateTime?
+  createdAt   DateTime     @default(now())
+
+  @@map("hos_alerts")
+}
+
+// ── LOADS ─────────────────────────────────────────────────────────────────────
+
+model Load {
+  id              String     @id @default(uuid())
+  loadNumber      String     @unique
+  bolRef          String?
+  bolDocumentId   String?
+  bolDocument     Document?  @relation("LoadBOL", fields: [bolDocumentId], references: [id])
+
+  // Parties
+  shipperId       String?
+  shipper         Shipper?   @relation(fields: [shipperId], references: [id])
+  carrierId       String?
+  carrier         Carrier?   @relation(fields: [carrierId], references: [id])
+
+  // Route
+  pickupAddress   String
+  pickupCity      String
+  pickupState     String
+  pickupZip       String?
+  pickupLat       Float?
+  pickupLng       Float?
+  pickupWindowStart DateTime?
+  pickupWindowEnd   DateTime?
+  deliveryAddress String
+  deliveryCity    String
+  deliveryState   String
+  deliveryZip     String?
+  deliveryLat     Float?
+  deliveryLng     Float?
+  deliveryWindowStart DateTime?
+  deliveryWindowEnd   DateTime?
+
+  // Freight
+  commodity       String?
+  weightLbs       Float?
+  pieces          Int?
+  pallets         Int?
+  dims            String?
+  hazmat          Boolean    @default(false)
+  specialInstructions String?
+
+  // Financials
+  rate            Float?
+  rateType        String?    // FLAT, PER_MILE
+  estimatedMiles  Float?
+  actualMiles     Float?
+  deadheadMiles   Float?
+
+  // Assignment
+  truckId         String?
+  truck           Truck?     @relation(fields: [truckId], references: [id])
+  driverId        String?
+  driver          Driver?    @relation(fields: [driverId], references: [id])
+  dispatchedAt    DateTime?
+  dispatchedById  String?
+  dispatchedBy    User?      @relation("LoadDispatchedBy", fields: [dispatchedById], references: [id])
+
+  // Status
+  status          LoadStatus @default(UNASSIGNED)
+  eta             DateTime?
+  actualPickup    DateTime?
+  actualDelivery  DateTime?
+  slaDeadline     DateTime?
+
+  // Matching
+  matchScore      Float?
+  matchFactors    Json?      // { distance: 30, hos: 25, equipment: 25, backhaul: 20 }
+
+  // CT integration
+  ctShipmentId    String?
+
+  createdById     String?
+  createdBy       User?      @relation("LoadCreatedBy", fields: [createdById], references: [id])
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  trackingEvents  LoadTrackingEvent[]
+  documents       Document[]
+  hosAlerts       HOSAlert[]
+  matchSuggestions MatchSuggestion[]
+
+  @@map("loads")
+}
+
+model LoadTrackingEvent {
+  id         String   @id @default(uuid())
+  loadId     String
+  load       Load     @relation(fields: [loadId], references: [id])
+  eventType  String
+  location   String?
+  city       String?
+  state      String?
+  lat        Float?
+  lng        Float?
+  speedMph   Float?
+  notes      String?
+  recordedAt DateTime @default(now())
+
+  @@map("load_tracking_events")
+}
+
+// ── DOCUMENTS & BOL AI ────────────────────────────────────────────────────────
+
+model Document {
+  id              String             @id @default(uuid())
+  type            DocumentType       @default(BOL)
+  originalName    String
+  filePath        String
+  mimeType        String?
+  sizeBytes       Int?
+
+  // AI extraction
+  aiStatus        AIExtractionStatus @default(PENDING)
+  aiRawResponse   Json?
+  aiExtracted     Json?              // structured extracted fields
+  aiConfidence    Float?
+  aiModel         String?
+  extractedAt     DateTime?
+
+  // After dispatcher review
+  reviewedAt      DateTime?
+  reviewedById    String?
+  correctionDelta Json?              // what the dispatcher changed vs AI output
+
+  loadId          String?
+  load            Load?   @relation(fields: [loadId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  bolLoad Load[] @relation("LoadBOL")
+
+  @@map("documents")
+}
+
+// ── MATCH SUGGESTIONS ─────────────────────────────────────────────────────────
+
+model MatchSuggestion {
+  id            String   @id @default(uuid())
+  loadId        String
+  load          Load     @relation(fields: [loadId], references: [id])
+  truckId       String
+  driverId      String
+  rank          Int
+  totalScore    Float
+  scoreFactors  Json     // { distance: { score, value }, hos: { score, value }, ... }
+  distanceMiles Float?
+  backhaulRevenue Float?
+  generatedAt   DateTime @default(now())
+  accepted      Boolean  @default(false)
+  overridden    Boolean  @default(false)
+
+  @@map("match_suggestions")
+}
+
+// ── BACKHAUL OPPORTUNITIES ────────────────────────────────────────────────────
+
+model BackhaulOpportunity {
+  id              String   @id @default(uuid())
+  originCity      String
+  originState     String
+  destCity        String
+  destState       String
+  estimatedRevenue Float
+  loadId          String?  // linked load if booked
+  surfacedForLoadId String
+  radiusMiles     Float
+  capturedAt      DateTime?
+  createdAt       DateTime @default(now())
+
+  @@map("backhaul_opportunities")
+}
+
+// ── ACTIVITY LOG ──────────────────────────────────────────────────────────────
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@map("activity_logs")
+}
