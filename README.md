@@ -6,7 +6,7 @@
 [![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
 [![Part of HaulSync](https://img.shields.io/badge/HaulSync-TMS%20Dispatch-8B5CF6)](https://github.com/your-org/haulsync)
 
-> **A self-hostable TMS Dispatch & Planning module — built on the HaulSync platform. Cuts dispatcher workload from 20 hours to 3 hours a week with AI-powered load matching, a unified dispatch board, and intelligent HOS monitoring.**
+> **A self-hostable TMS Dispatch & Planning module built on the HaulSync platform, designed to streamline dispatch operations through AI-powered load matching, a unified dispatch board, and intelligent HOS monitoring.**
 
 HaulSync TMS Dispatch is a dedicated module in the HaulSync ecosystem, purpose-built for FTL carriers, brokers, and fleet operators that need to eliminate manual dispatch work and drive fleet utilization higher. It ships as a standalone service that integrates seamlessly with the core HaulSync platform and plugs natively into the Fleet and Control Tower modules.
 
